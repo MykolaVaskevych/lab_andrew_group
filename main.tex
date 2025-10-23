@@ -73,7 +73,7 @@
 \title{\Huge Introduction to Kubernetes \& Container Orchestration \\
        \Large Deploying, Scaling, and Industry Context}
 \author{Student Lab Manual}
-\date{Duration: 2 Hours \\ Target Audience: Student Group}
+\date{Target Audience: Student Group}
 
 \begin{document}
 
@@ -89,12 +89,32 @@
 
 This lab introduces \textbf{Kubernetes (K8s)}, the industry standard for container orchestration, using Minikube for hands-on local experience. Students will deploy and scale a microservice, understand the declarative architecture, and learn how Kubernetes compares to proprietary cloud services like AWS EC2 Auto Scaling and Azure App Service.
 
-\textbf{Duration:} 2 Hours \newline
 \textbf{Learning Objectives:} Students will understand Kubernetes architecture, deploy applications declaratively, demonstrate self-healing capabilities, and articulate Kubernetes' advantages in the real world.
+
+\subsection*{Prerequisites}
+
+This lab assumes you have a containerized microservice (Spring Boot application) from previous labs with:
+\begin{itemize}
+    \item A working \texttt{Dockerfile}
+    \item An HTTP endpoint that responds to requests (e.g., \texttt{GET /})
+    \item \textbf{Important}: An endpoint that performs CPU-intensive work (e.g., \texttt{GET /compute}) so the HPA can trigger on CPU load. If your microservice only returns static responses, the load test will not generate sufficient CPU usage to trigger autoscaling.
+\end{itemize}
+
+If your previous microservice lacks a CPU-intensive endpoint, you can add a simple one:
+\begin{lstlisting}[caption=Example CPU-heavy endpoint in Spring Boot]
+@GetMapping("/compute")
+public String computeHeavy() {
+    long result = 0;
+    for (int i = 0; i < 1_000_000_000; i++) {
+        result += i % 7;
+    }
+    return "Computed: " + result;
+}
+\end{lstlisting}
 
 \newpage
 
-\part{Part 1: Conceptual Foundation (20 Minutes)}
+\part{Part 1: Conceptual Foundation}
 
 \section{Kubernetes Architecture (High-Level Overview)}
 
@@ -249,9 +269,9 @@ Kubernetes is the right choice when you need:
 
 \newpage
 
-\part{Part 2: Hands-On Deployment (100 Minutes)}
+\part{Part 2: Hands-On Deployment}
 
-\section{Step 1: Local Kubernetes Environment Setup (15 Minutes)}
+\section{Step 1: Local Kubernetes Environment Setup}
 
 \subsection{1.1: Install Minikube and kubectl}
 
@@ -381,7 +401,7 @@ If status shows \texttt{NotReady}, wait for the cluster to fully initialize.
 
 \newpage
 
-\section{Step 2: Deployment and Service (25 Minutes)}
+\section{Step 2: Deployment and Service}
 
 \subsection{2.1: Create Deployment YAML}
 
@@ -521,7 +541,7 @@ If you see ``Connection refused'', wait a few seconds for the Pod to initialize.
 
 \newpage
 
-\section{Step 3: Declarative Management and Self-Healing (20 Minutes)}
+\section{Step 3: Declarative Management and Self-Healing}
 
 \subsection{3.1: Manual Scaling (Scale Up)}
 
@@ -585,7 +605,7 @@ kubectl get pods
 
 \newpage
 
-\section{Step 4: Horizontal Pod Autoscaler (HPA) (40 Minutes)}
+\section{Step 4: Horizontal Pod Autoscaler (HPA)}
 
 \subsection{4.1: Enable Metrics Server}
 
@@ -622,7 +642,27 @@ kubectl autoscale deployment microservice-deployment \
 # - Maximum 5 Pods
 \end{lstlisting}
 
-\subsection{4.3: Monitor HPA Status}
+\subsection{4.3: Verify Metrics Collection}
+
+Before generating load, verify that metrics are being collected properly:
+
+\begin{lstlisting}[caption=Verify metrics are flowing]
+# Wait 30-60 seconds for metrics server to initialize
+# Then check if metrics are available
+kubectl top pods
+
+# Expected output:
+# NAME                                    CPU(cores)   MEMORY(bytes)
+# microservice-deployment-abc123def456    50m          128Mi
+#
+# If you see no output or errors, wait longer and try again
+\end{lstlisting}
+
+\begin{importantbox}
+The Metrics Server takes time to collect baseline metrics. You must see CPU values above before the HPA will function. If you see ``<unknown>'' in HPA status, this means metrics are still being collected.
+\end{importantbox}
+
+\subsection{4.4: Monitor HPA Status}
 
 \begin{lstlisting}[caption=Monitor HPA]
 # Check HPA status
@@ -638,31 +678,49 @@ kubectl get hpa --watch
 \end{lstlisting}
 
 \begin{tipbox}
-Initially you may see \texttt{<unknown>/50\%}. This is normal—the Metrics Server needs time to collect data. Wait 1-2 minutes.
+Initially you may see \texttt{<unknown>/50\%}. This is normal—the Metrics Server collects data for 1-2 minutes before it can calculate averages. If this persists beyond 2 minutes, restart the metrics-server addon.
 \end{tipbox}
 
-\subsection{4.4: Generate Load}
+\subsection{4.5: Generate Load}
 
 Simulate CPU-intensive traffic to trigger scaling:
 
-\begin{lstlisting}[caption=Generate load with curl loop]
+\begin{importantbox}
+\textbf{Critical}: To trigger the HPA, you must hit the CPU-heavy endpoint (e.g., \texttt{/compute}) that you added to your microservice. Simply hitting a static response endpoint will not generate enough CPU load. If your original microservice doesn't have a CPU-intensive endpoint, the HPA will not scale.
+\end{importantbox}
+
+\begin{lstlisting}[caption=Generate load with curl loop on CPU-heavy endpoint]
 # Terminal 1: Get service URL
 SERVICE_URL=$(minikube service microservice-service --url)
 
-# Terminal 2: Generate load with curl loop
-while true; do
-  curl -s $SERVICE_URL/ > /dev/null
+# Terminal 2: Generate load with concurrent requests
+# Use multiple parallel processes for more aggressive load
+for i in {1..10}; do
+  while true; do
+    curl -s $SERVICE_URL/compute > /dev/null
+  done &
 done
 
-# Terminal 3: Watch HPA scale up
+# Terminal 3: Watch HPA scale up in real-time
 kubectl get hpa --watch
 
 # You should see:
-# REPLICAS increasing: 1 -> 2 -> 3 -> 4 -> 5
-# TARGETS showing high CPU usage
+# REPLICAS increasing: 1 -> 2 -> 3 -> 4 -> 5 (may take 1-3 minutes)
+# TARGETS showing CPU % rising above 50%
+
+# If replicas don't increase after 5 minutes, try more parallel requests:
+# for i in {1..20}; do ... (increase from 10 to 20)
 \end{lstlisting}
 
-\subsection{4.5: Observe Scaling Down}
+\begin{tipbox}
+\textbf{Alternative}: If you want stronger load, install \texttt{apache2-utils} and use \texttt{ab} (Apache Bench):
+\begin{verbatim}
+ab -n 100000 -c 50 $SERVICE_URL/compute
+\end{verbatim}
+This creates 50 concurrent connections and sends 100,000 requests, generating much more CPU load than simple curl loops.
+\end{tipbox}
+
+\subsection{4.6: Observe Scaling Down}
 
 \begin{lstlisting}[caption=Stop load and watch scale-down]
 # In Terminal 2, press Ctrl+C to stop load generation
@@ -670,14 +728,20 @@ kubectl get hpa --watch
 # In Terminal 3, continue watching
 kubectl get hpa --watch
 
-# After 5 minutes (stabilization period):
-# REPLICAS decreases back to 1
+# After the stabilization period (described below):
+# REPLICAS decreases gradually back toward 1
 # TARGETS shows low CPU usage
 \end{lstlisting}
 
-\begin{tipbox}
-Kubernetes includes a 5-minute stabilization period to prevent rapid scaling oscillations—this is intentional behavior.
-\end{tipbox}
+\begin{importantbox}
+\textbf{HPA Timing Behavior}:
+\begin{itemize}
+    \item \textbf{Scale-up}: HPA checks metrics every 30 seconds. When CPU exceeds 50\%, it scales up immediately (if there's capacity).
+    \item \textbf{Scale-down}: HPA has a 5-minute stabilization period after the last scale-up before it scales down. This prevents rapid oscillations when load fluctuates.
+    \item \textbf{Metric delay}: Metrics are polled every 30 seconds, so you may see a 30-second delay between stopping load and seeing CPU usage drop.
+\end{itemize}
+\textbf{Example timeline}: Stop load at T=0 → CPU drops at T=30s → HPA begins scale-down at T=5m30s.
+\end{importantbox}
 
 \section{Step 5: Clean Up}
 
