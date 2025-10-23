@@ -21,7 +21,7 @@
 
 % Code listing configuration
 \lstset{
-    language=java,
+    language=bash,
     basicstyle=\ttfamily\small,
     backgroundcolor=\color{codebackground},
     numbers=left,
@@ -66,15 +66,14 @@
 % Headers and footers
 \pagestyle{fancy}
 \fancyhf{}
-\rhead{REST API Testing Lab}
-\lhead{Unit \& Integration Testing}
+\rhead{Kubernetes Lab}
+\lhead{Container Orchestration}
 \cfoot{\thepage}
 
-\title{\Huge Comprehensive REST API Testing Lab \\
-       \Large Unit, Integration, and Automated Testing \\
-       \large with Spring Boot, MySQL, Mockito, and Postman}
+\title{\Huge Introduction to Kubernetes \& Container Orchestration \\
+       \Large Deploying, Scaling, and Industry Context}
 \author{Student Lab Manual}
-\date{Duration: 2-3 Hours \\ Target Audience: Students}
+\date{Duration: 2 Hours \\ Target Audience: Student Group}
 
 \begin{document}
 
@@ -88,1402 +87,627 @@
 
 \section*{Lab Overview}
 
-This comprehensive lab teaches professional testing practices for REST API development using Spring Boot. You will master three essential testing paradigms: unit testing to verify individual components in isolation, integration testing to validate database interactions, and automated API testing using Postman. Throughout this lab, you'll learn industry-standard practices including mocking external dependencies, managing test databases with Docker, and measuring code coverage with JaCoCo.
+This lab introduces \textbf{Kubernetes (K8s)}, the industry standard for container orchestration, using Minikube for hands-on local experience. Students will deploy and scale a microservice, understand the declarative architecture, and learn how Kubernetes compares to proprietary cloud services like AWS EC2 Auto Scaling and Azure App Service.
 
-\textbf{Learning Outcomes:} By the end of this lab, you will be able to write production-grade tests, mock external services, verify database interactions, and automate API validation—skills essential for any professional software engineer.
+\textbf{Duration:} 2 Hours \newline
+\textbf{Learning Objectives:} Students will understand Kubernetes architecture, deploy applications declaratively, demonstrate self-healing capabilities, and articulate Kubernetes' advantages in the real world.
 
 \newpage
 
-\part{Part 1: Conceptual Foundation}
+\part{Part 1: Conceptual Foundation (20 Minutes)}
 
-\section{Testing Pyramid and Test Types}
+\section{Kubernetes Architecture (High-Level Overview)}
 
-Professional software development follows the \textbf{testing pyramid}, a concept that defines the distribution and purpose of different test types.
+Kubernetes operates on a \textbf{desired state model}. You declare what you want (e.g., ``I want 3 replicas of my web app running''), and Kubernetes continuously works to make the actual state match the desired state.
 
-\subsection{The Testing Pyramid}
+\subsection{Control Plane (Master Node)}
 
-\begin{center}
-\begin{tabularx}{0.8\textwidth}{|l|X|X|}
-\toprule
-\textbf{Test Type} & \textbf{Characteristics} & \textbf{Purpose} \\
-\midrule
-\textbf{Unit Tests} (Base: 70\%) &
-Fast, isolated, test single methods or functions. Mock all external dependencies. &
-Verify individual component logic and catch bugs early. \\
-\midrule
-\textbf{Integration Tests} (Middle: 20\%) &
-Slower, test multiple components together. Test with real or containerized databases. &
-Verify that components work together correctly and database interactions are valid. \\
-\midrule
-\textbf{End-to-End Tests} (Top: 10\%) &
-Slowest, test the entire application flow. Test from user perspective. &
-Verify complete user workflows work as expected in production-like environments. \\
-\bottomrule
-\end{tabularx}
-\end{center}
+The \textbf{Control Plane} is the brain of the cluster. It manages the desired state, schedules applications, and performs auto-healing.
 
-\subsection{Why Each Test Type Matters}
+\subsubsection{API Server}
 
-\subsubsection{Unit Tests}
+The \textbf{API Server} is the only component you interact with (via \texttt{kubectl}). It is the central management hub for all cluster operations.
 
-Unit tests verify the \textbf{logic of individual components} in isolation. They should:
+\subsubsection{etcd}
 
-\begin{itemize}
-    \item Execute in milliseconds (very fast feedback)
-    \item Test a single \textbf{method or function} with multiple scenarios
-    \item Mock all external dependencies (database, APIs, file systems)
-    \item Be deterministic (always pass or always fail, never flaky)
-\end{itemize}
-
-\begin{tipbox}
-Good unit tests are the first line of defense against bugs. They're fast enough to run hundreds of times during development, catching logic errors before they reach integration tests.
-\end{tipbox}
-
-\subsubsection{Integration Tests}
-
-Integration tests verify that \textbf{multiple components work together}. They should:
-
-\begin{itemize}
-    \item Test real interactions (e.g., service + database)
-    \item Use containerized or in-memory databases (not mocks)
-    \item Execute in seconds (slower than unit tests, but still reasonably fast)
-    \item Validate database queries, transaction handling, and data persistence
-\end{itemize}
-
-\begin{tipbox}
-Integration tests catch issues that unit tests cannot find: incorrect SQL queries, missing database mappings, transactional bugs, and race conditions.
-\end{tipbox}
-
-\subsubsection{Automated API Tests (Postman)}
-
-API tests verify that \textbf{endpoints respond correctly}. They should:
-
-\begin{itemize}
-    \item Test complete request-response cycles
-    \item Validate HTTP status codes and response bodies
-    \item Test edge cases and error scenarios
-    \item Be automatable and repeatable
-\end{itemize}
-
-\section{Mocking and Test Isolation}
-
-One of the most critical skills in testing is understanding \textbf{when and how to mock dependencies}.
-
-\subsection{What is Mocking?}
-
-A \textbf{mock} is a fake object that simulates the behavior of a real object. Instead of calling a real database or external API during a test, you use a mock that returns predetermined responses.
-
-\subsection{Why Mock?}
-
-\begin{description}
-    \item[Speed] Real databases and APIs are slow. Mocks respond instantly.
-    \item[Isolation] By mocking external services, you test only your code's logic, not the external service's behavior.
-    \item[Reliability] External services might be unavailable or slow during testing. Mocks ensure consistent test behavior.
-    \item[Cost] Mocking prevents charges from APIs with usage costs or rate limits.
-\end{description}
-
-\subsection{Mockito Framework}
-
-\textbf{Mockito} is a Java mocking library that makes it easy to create mocks and verify interactions.
+The \textbf{etcd} database is the cluster's single source of truth. It stores the entire desired state of your cluster—all Deployments, Services, Pods, and configurations.
 
 \begin{importantbox}
-Key Mockito concepts:
-\begin{itemize}
-    \item \texttt{@Mock}: Creates a mock object (fake dependency)
-    \item \texttt{@InjectMocks}: Injects mocks into the class being tested
-    \item \texttt{when(...).thenReturn(...)}: Sets up what a mock should return
-    \item \texttt{verify()}: Asserts that a mock method was called
-\end{itemize}
+If etcd fails, the cluster loses its memory. In production, etcd is replicated across multiple Control Plane nodes for high availability. In Minikube, there is a single etcd instance.
 \end{importantbox}
 
-\section{Database Testing Strategies}
+\subsection{Worker Nodes}
 
-\subsection{In-Memory vs. Docker vs. TestContainers}
+\textbf{Worker Nodes} are the machines (physical servers or VMs) that actually run your applications. Each Worker Node contains:
+
+\subsubsection{Kubelet}
+
+The \textbf{Kubelet} is an agent running on every Worker Node. It communicates with the API Server to receive the desired state and ensures Pods are running and healthy.
+
+\subsubsection{Container Runtime}
+
+The \textbf{Container Runtime} (e.g., Docker or containerd) is the software that pulls container images and runs them. The Kubelet uses it to manage container lifecycles.
+
+\subsection{Pods}
+
+A \textbf{Pod} is the smallest deployable unit in Kubernetes. Although a Pod can contain multiple containers, it typically contains one application container. Pods are ephemeral—they are created and destroyed as needed.
+
+\begin{tipbox}
+Think of a Pod as a lightweight wrapper around your Docker container. Multiple Pods run on each Worker Node, distributed by the scheduler.
+\end{tipbox}
+
+\begin{figure}[H]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+\multicolumn{3}{|c|}{\textbf{Kubernetes Cluster Structure}} \\
+\hline
+\textbf{Control Plane} & \textbf{Worker Node 1} & \textbf{Worker Node 2} \\
+\hline
+API Server & Pod 1 & Pod 3 \\
+Scheduler & Pod 2 & Pod 4 \\
+etcd & Container Runtime & Container Runtime \\
+\hline
+\end{tabular}
+\end{figure}
+
+\section{How Autoscaling Works (HPA)}
+
+The \textbf{Horizontal Pod Autoscaler (HPA)} is a Controller that constantly monitors metrics (like CPU usage) of a Deployment.
+
+\subsection{The HPA Workflow}
+
+\begin{enumerate}
+    \item \textbf{Monitoring}: The HPA checks the average CPU utilization of all running Pods against a target you define (e.g., 50\%).
+
+    \item \textbf{Calculation}: If the current average exceeds the target, the HPA calculates the ideal number of replicas needed:
+    \[
+    \text{desired\_replicas} = \left\lceil \frac{\text{current\_utilization}}{\text{target\_utilization}} \times \text{current\_replicas} \right\rceil
+    \]
+
+    \item \textbf{Action}: The HPA updates the \texttt{replicas} field in the Deployment object.
+
+    \item \textbf{Self-Healing}: The Deployment Controller sees the updated replica count and automatically creates new Pods to match the desired state.
+\end{enumerate}
+
+\begin{importantbox}
+The HPA doesn't directly create Pods. Instead, it updates the Deployment's desired replica count, and the Deployment Controller handles actual Pod creation. This is the power of Kubernetes' declarative model.
+\end{importantbox}
+
+\section{Kubernetes in the Real World}
+
+In this section, we compare Kubernetes with proprietary cloud services to understand how Kubernetes fits into the industry landscape.
+
+\subsection{Comparison Table}
 
 \begin{table}[H]
 \centering
 \small
 \begin{tabularx}{\textwidth}{|l|X|X|X|}
 \toprule
-\textbf{Approach} & \textbf{Setup} & \textbf{Realism} & \textbf{Speed} \\
+\textbf{Feature} & \textbf{AWS EC2 Auto Scaling} & \textbf{Azure App Service} & \textbf{Kubernetes (EKS, AKS, GKE)} \\
 \midrule
-\textbf{H2 In-Memory} &
-Very fast, no setup. &
-Low; doesn't match production MySQL. &
-Very fast. \\
+\textbf{Abstraction Level} &
+Infrastructure (VMs). Scales the underlying virtual machines. &
+Platform (Web Apps). Fully managed web apps/APIs. &
+Container (Pods). Scales containerized workload within VMs. \\
 \midrule
-\textbf{Docker Compose} &
-Requires Docker installed. &
-High; real MySQL instance. &
-Fast; startup takes seconds. \\
+\textbf{Scaling Unit} &
+EC2 Virtual Machines. Scaling takes minutes. &
+App Service Plan Instances. Scaling is relatively fast. &
+Pods. Scaling takes seconds. Extremely fast. \\
 \midrule
-\textbf{TestContainers} &
-Requires Docker; automatic provisioning. &
-High; spins up a real database. &
-Fast; container lifecycle automated. \\
+\textbf{Vendor Lock-in} &
+High. Tied deeply to AWS APIs. &
+High. Tied deeply to Azure APIs. &
+Low (Portable). YAML files work across AWS (EKS), Azure (AKS), GCP (GKE), and on-premise clusters. \\
+\midrule
+\textbf{Control \& Flexibility} &
+High control over OS/VM layer. &
+Low control; highly opinionated. &
+High control over deployment, networking, and storage. \\
+\midrule
+\textbf{Primary Use Case} &
+Scaling monolithic applications where VM is the boundary. &
+Simple web applications and APIs with zero infrastructure overhead. &
+Complex Microservices architectures requiring cross-cloud portability and advanced deployment strategies. \\
 \bottomrule
 \end{tabularx}
+\caption{Kubernetes vs. Cloud Scaling Services}
 \end{table}
 
-\textbf{For this lab}, we'll use \textbf{Docker Compose} to spin up a real MySQL database specifically for testing.
+\subsection{Key Insights}
 
-\subsection{Test Profile Configuration}
+\subsubsection{Pod vs. VM Scaling}
 
-Spring Boot supports multiple profiles (dev, test, prod). We'll create a \texttt{test} profile so tests use their own MySQL database, separate from development.
+\textbf{AWS EC2 Auto Scaling} scales at the VM level—launching new EC2 instances takes minutes and is expensive. \textbf{Kubernetes} scales at the Pod level (which runs inside existing VMs)—spinning up a new Pod takes seconds and is much cheaper.
+
+\subsubsection{Portability}
+
+\textbf{Azure App Service} and \textbf{AWS EC2 Auto Scaling} are proprietary solutions tightly coupled to their cloud providers. Migration requires rewriting infrastructure.
+
+\textbf{Kubernetes} is open-source. Your YAML files work identically across AWS (EKS), Azure (AKS), Google Cloud (GKE), and on-premise clusters. This avoids vendor lock-in.
+
+\subsubsection{Complexity vs. Control}
+
+\begin{itemize}
+    \item \textbf{Azure App Service}: Simplest—upload your code, Azure manages everything. Limited control.
+    \item \textbf{AWS EC2 Auto Scaling}: More control but operates at VM level (coarse-grained).
+    \item \textbf{Kubernetes}: Fine-grained control over deployment, networking, and storage. Steeper learning curve.
+\end{itemize}
+
+\subsection{When to Use Kubernetes}
+
+Kubernetes is the right choice when you need:
+
+\begin{itemize}
+    \item \textbf{Microservices Architecture}: Multiple independent services scaling at different rates.
+    \item \textbf{Cross-Cloud Portability}: Avoid vendor lock-in and maintain deployment flexibility.
+    \item \textbf{Fine-Grained Control}: Need control over networking, storage, and deployment strategies.
+    \item \textbf{Fast Scaling}: Need to scale in seconds without waiting for VM provisioning.
+\end{itemize}
 
 \newpage
 
-\part{Part 2: Environment Setup}
+\part{Part 2: Hands-On Deployment (100 Minutes)}
 
-\section{Step 1: Prerequisites and Installation}
+\section{Step 1: Local Kubernetes Environment Setup (15 Minutes)}
 
-\subsection{Required Software}
+\subsection{1.1: Install Minikube and kubectl}
 
-Before starting, ensure you have installed:
-
-\begin{itemize}
-    \item \textbf{Java Development Kit (JDK) 17+} - \url{https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html}
-    \item \textbf{IntelliJ IDEA Community Edition} - \url{https://www.jetbrains.com/idea/download/}
-    \item \textbf{Docker Desktop} - \url{https://www.docker.com/products/docker-desktop/}
-    \item \textbf{Postman} - \url{https://www.postman.com/downloads/}
-    \item \textbf{MySQL Workbench (optional)} - \url{https://dev.mysql.com/downloads/workbench/}
-\end{itemize}
-
-\subsection{Verify Installation}
-
-\begin{lstlisting}[language=bash, caption=Verify all tools are installed]
-# Check Java
-java -version
-
-# Check Docker
-docker --version
-docker-compose --version
-
-# Verify Docker daemon is running
-docker ps
-\end{lstlisting}
-
-\section{Step 2: Project Setup}
-
-\subsection{Option A: Download Starter Project}
+\subsubsection{Prerequisites}
 
 \begin{itemize}
-    \item Visit: \url{https://github.com/Braniacsl/CS4297-Lab}
-    \item Click the green "Code" button and select "Download ZIP"
-    \item Extract the ZIP file
-    \item Open the project in IntelliJ IDEA
+    \item Docker Desktop (with Docker daemon running)
+    \item Homebrew (macOS) or appropriate package manager
 \end{itemize}
 
-\subsection{Option B: Create from Scratch}
+\begin{importantbox}
+If you don't have Docker Desktop, download it from \url{https://www.docker.com/products/docker-desktop}.
+\end{importantbox}
 
-Use Spring Initializr (\url{https://start.spring.io/}) with these dependencies:
+\subsubsection{macOS Installation}
 
-\begin{itemize}
-    \item Spring Web
-    \item Spring Data JPA
-    \item MySQL Driver
-    \item JUnit Jupiter (for testing)
-    \item Mockito (for mocking)
-\end{itemize}
+\begin{lstlisting}[caption=Install Minikube and kubectl on macOS]
+# Install Minikube using Homebrew
+brew install minikube
 
-\section{Step 3: Configure Docker Compose for Testing}
+# Install kubectl
+brew install kubectl
 
-Create a \texttt{docker-compose.yml} file in your project root:
-
-\begin{lstlisting}[language=bash, caption=docker-compose.yml - MySQL Database Setup]
-version: '3.8'
-services:
-  mysql-test:
-    image: mysql:8.0
-    container_name: mysql-test-db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: testdb
-      MYSQL_USER: testuser
-      MYSQL_PASSWORD: testpass
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql-test-data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 5s
-      retries: 10
-
-volumes:
-  mysql-test-data:
+# Verify installations
+minikube version
+kubectl version --client
 \end{lstlisting}
 
-\subsection{Database Initialization Script}
+\subsubsection{Linux Installation}
 
-Create \texttt{init.sql} in your project root:
+\begin{lstlisting}[caption=Install Minikube and kubectl on Linux]
+# Download Minikube
+curl -Lo minikube https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+chmod +x minikube
+sudo mv minikube /usr/local/bin/
 
-\begin{lstlisting}[language=sql, caption=init.sql - Database Schema]
--- Create Users table
-CREATE TABLE users (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(100) NOT NULL UNIQUE,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+# Install kubectl
+sudo apt-get update
+sudo apt-get install -y kubectl
 
--- Create sample index for performance
-CREATE INDEX idx_email ON users(email);
+# Verify installations
+minikube version
+kubectl version --client
 \end{lstlisting}
 
-\subsection{Start the Test Database}
+\subsubsection{Windows Installation}
 
-\begin{lstlisting}[language=bash, caption=Start Docker Compose]
-# From your project root directory
-docker-compose up -d
+\begin{lstlisting}[caption=Install Minikube and kubectl on Windows]
+# Using Chocolatey
+choco install minikube
+choco install kubernetes-cli
 
-# Verify the container is running
-docker ps
+# Or download from GitHub:
+# https://github.com/kubernetes/minikube/releases
+# https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/
 
-# Verify you can connect to MySQL
-docker exec mysql-test-db mysql -u testuser -ptestpass testdb -e "SELECT 1;"
+minikube version
+kubectl version --client
+\end{lstlisting}
+
+\subsection{1.2: Start the Local Kubernetes Cluster}
+
+\begin{lstlisting}[caption=Start Minikube cluster]
+# Start the Minikube cluster
+minikube start
+
+# This creates a local Kubernetes cluster with:
+# - Control Plane components
+# - One Worker Node
+# - Networking and storage configured
+# - kubectl configured to point to the cluster
 \end{lstlisting}
 
 \begin{tipbox}
-The \texttt{-d} flag starts the container in detached mode (runs in background). Use \texttt{docker-compose logs -f} to view logs, and \texttt{docker-compose down} to stop when finished.
+First startup takes a few minutes. Subsequent starts are faster.
 \end{tipbox}
 
-\section{Step 4: Configure Spring Boot Application Properties}
+\subsection{1.3: Connect to Minikube's Docker Daemon}
 
-Create \texttt{src/main/resources/application-test.properties}:
+Minikube includes its own Docker daemon. To use it:
 
-\begin{lstlisting}[language=bash, caption=application-test.properties - Test Profile Configuration]
-# Database Configuration
-spring.datasource.url=jdbc:mysql://localhost:3306/testdb
-spring.datasource.username=testuser
-spring.datasource.password=testpass
-spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+\begin{lstlisting}[caption=Connect to Minikube Docker]
+# Evaluate environment variables to point to Minikube's Docker
+eval $(minikube docker-env)
 
-# Hibernate Configuration
-spring.jpa.hibernate.ddl-auto=validate
-spring.jpa.show-sql=true
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
-spring.jpa.properties.hibernate.format_sql=true
-
-# Logging
-logging.level.org.hibernate.SQL=DEBUG
-logging.level.org.hibernate.type.descriptor.sql.BasicBinder=TRACE
-
-# Server Port for Integration Tests
-server.port=8081
-\end{lstlisting}
-
-\newpage
-
-\part{Part 3: Unit Testing}
-
-\section{Step 1: Build Service Layer with Dependencies}
-
-\subsection{Create User Entity}
-
-\begin{lstlisting}[language=java, caption=User.java - JPA Entity]
-package com.cs4297.lab.model;
-
-import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import java.time.LocalDateTime;
-
-@Entity
-@Table(name = "users")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class User {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false, unique = true)
-    private String username;
-
-    @Column(nullable = false, unique = true)
-    private String email;
-
-    @Column(nullable = false)
-    private String password;
-
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
-}
-\end{lstlisting}
-
-\subsection{Create Repository Interface}
-
-\begin{lstlisting}[language=java, caption=UserRepository.java - Spring Data JPA Repository]
-package com.cs4297.lab.repository;
-
-import com.cs4297.lab.model.User;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-import java.util.Optional;
-
-@Repository
-public interface UserRepository extends JpaRepository<User, Long> {
-    Optional<User> findByEmail(String email);
-    Optional<User> findByUsername(String username);
-    boolean existsByEmail(String email);
-    boolean existsByUsername(String username);
-}
-\end{lstlisting}
-
-\subsection{Create Service Class}
-
-\begin{lstlisting}[language=java, caption=UserService.java - Business Logic Layer]
-package com.cs4297.lab.service;
-
-import com.cs4297.lab.model.User;
-import com.cs4297.lab.repository.UserRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
-import java.util.Optional;
-import java.util.regex.Pattern;
-
-@Service
-@Transactional
-public class UserService {
-
-    private final UserRepository userRepository;
-    private static final String EMAIL_REGEX =
-        "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}$";
-    private static final Pattern EMAIL_PATTERN =
-        Pattern.compile(EMAIL_REGEX);
-
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
-    public User createUser(String username, String email, String password) {
-        // Validate inputs
-        if (!isValidEmail(email)) {
-            throw new IllegalArgumentException("Invalid email format");
-        }
-
-        if (userRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("Email already exists");
-        }
-
-        if (userRepository.existsByUsername(username)) {
-            throw new IllegalArgumentException("Username already exists");
-        }
-
-        if (password == null || password.length() < 8) {
-            throw new IllegalArgumentException(
-                "Password must be at least 8 characters");
-        }
-
-        User user = new User();
-        user.setUsername(username);
-        user.setEmail(email);
-        user.setPassword(password); // In production, hash this!
-
-        return userRepository.save(user);
-    }
-
-    public Optional<User> getUserById(Long id) {
-        return userRepository.findById(id);
-    }
-
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
-    public Optional<User> updateUser(Long id, String email, String password) {
-        return userRepository.findById(id).map(user -> {
-            if (email != null && !email.equals(user.getEmail())) {
-                if (!isValidEmail(email)) {
-                    throw new IllegalArgumentException("Invalid email");
-                }
-                user.setEmail(email);
-            }
-            if (password != null && password.length() >= 8) {
-                user.setPassword(password);
-            }
-            return userRepository.save(user);
-        });
-    }
-
-    public boolean deleteUser(Long id) {
-        if (userRepository.existsById(id)) {
-            userRepository.deleteById(id);
-            return true;
-        }
-        return false;
-    }
-
-    private boolean isValidEmail(String email) {
-        return email != null && EMAIL_PATTERN.matcher(email).matches();
-    }
-}
-\end{lstlisting}
-
-\section{Step 2: Write Unit Tests for Service}
-
-\begin{lstlisting}[language=java, caption=UserServiceTest.java - Unit Tests with Mockito]
-package com.cs4297.lab.service;
-
-import com.cs4297.lab.model.User;
-import com.cs4297.lab.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-class UserServiceTest {
-
-    @Mock
-    private UserRepository userRepository;
-
-    @InjectMocks
-    private UserService userService;
-
-    private User testUser;
-
-    @BeforeEach
-    void setUp() {
-        testUser = new User();
-        testUser.setId(1L);
-        testUser.setUsername("testuser");
-        testUser.setEmail("test@example.com");
-        testUser.setPassword("password123");
-    }
-
-    @Test
-    void testCreateUser_Success() {
-        // Arrange
-        when(userRepository.existsByEmail("test@example.com"))
-            .thenReturn(false);
-        when(userRepository.existsByUsername("testuser"))
-            .thenReturn(false);
-        when(userRepository.save(any(User.class)))
-            .thenReturn(testUser);
-
-        // Act
-        User created = userService.createUser(
-            "testuser", "test@example.com", "password123");
-
-        // Assert
-        assertNotNull(created);
-        assertEquals("testuser", created.getUsername());
-        assertEquals("test@example.com", created.getEmail());
-        verify(userRepository, times(1)).save(any(User.class));
-    }
-
-    @Test
-    void testCreateUser_InvalidEmail() {
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () ->
-            userService.createUser("testuser", "invalid-email",
-                "password123")
-        );
-
-        // Verify save was never called
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void testCreateUser_DuplicateEmail() {
-        // Arrange
-        when(userRepository.existsByEmail("test@example.com"))
-            .thenReturn(true);
-
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () ->
-            userService.createUser("testuser", "test@example.com",
-                "password123")
-        );
-
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void testCreateUser_WeakPassword() {
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () ->
-            userService.createUser("testuser", "test@example.com",
-                "weak")
-        );
-
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void testGetUserById_Found() {
-        // Arrange
-        when(userRepository.findById(1L))
-            .thenReturn(Optional.of(testUser));
-
-        // Act
-        Optional<User> found = userService.getUserById(1L);
-
-        // Assert
-        assertTrue(found.isPresent());
-        assertEquals("testuser", found.get().getUsername());
-    }
-
-    @Test
-    void testGetUserById_NotFound() {
-        // Arrange
-        when(userRepository.findById(99L))
-            .thenReturn(Optional.empty());
-
-        // Act
-        Optional<User> found = userService.getUserById(99L);
-
-        // Assert
-        assertFalse(found.isPresent());
-    }
-
-    @Test
-    void testDeleteUser_Success() {
-        // Arrange
-        when(userRepository.existsById(1L)).thenReturn(true);
-
-        // Act
-        boolean deleted = userService.deleteUser(1L);
-
-        // Assert
-        assertTrue(deleted);
-        verify(userRepository, times(1)).deleteById(1L);
-    }
-
-    @Test
-    void testDeleteUser_NotFound() {
-        // Arrange
-        when(userRepository.existsById(99L)).thenReturn(false);
-
-        // Act
-        boolean deleted = userService.deleteUser(99L);
-
-        // Assert
-        assertFalse(deleted);
-        verify(userRepository, never()).deleteById(any());
-    }
-}
+# Verify you're using Minikube's Docker
+docker info | grep "Operating System"
+# Output should show: minikube
 \end{lstlisting}
 
 \begin{importantbox}
-Notice the pattern in these tests:
-\begin{itemize}
-    \item \textbf{Arrange}: Set up mocks with \texttt{when(...).thenReturn(...)}
-    \item \textbf{Act}: Call the method being tested
-    \item \textbf{Assert}: Verify the results with assertions
-    \item \textbf{Verify}: Check that mocks were called correctly
-\end{itemize}
+This step is critical! If you skip it, Kubernetes will try to pull your image from Docker Hub and fail.
 \end{importantbox}
 
-\newpage
+\subsection{1.4: Build the Container Image}
 
-\part{Part 4: Controller Testing with MockMvc}
+Assume you have a Spring Boot microservice (from previous labs) with a Dockerfile.
 
-\section{Step 1: Create REST Controller}
+\begin{lstlisting}[caption=Build Docker image]
+# Make sure you're connected to Minikube's Docker
+eval $(minikube docker-env)
 
-\begin{lstlisting}[language=java, caption=UserController.java - REST API Endpoints]
-package com.cs4297.lab.controller;
+# Build the image
+docker build -t microservice:v1 .
 
-import com.cs4297.lab.model.User;
-import com.cs4297.lab.service.UserService;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-
-@RestController
-@RequestMapping("/api/users")
-public class UserController {
-
-    private final UserService userService;
-
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
-
-    @GetMapping
-    public ResponseEntity<List<User>> getAllUsers() {
-        List<User> users = userService.getAllUsers();
-        return ResponseEntity.ok(users);
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
-        return userService.getUserById(id)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
-    }
-
-    @PostMapping
-    public ResponseEntity<User> createUser(
-            @RequestParam String username,
-            @RequestParam String email,
-            @RequestParam String password) {
-        try {
-            User user = userService.createUser(username, email, password);
-            return ResponseEntity.status(HttpStatus.CREATED).body(user);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<User> updateUser(
-            @PathVariable Long id,
-            @RequestParam(required = false) String email,
-            @RequestParam(required = false) String password) {
-        try {
-            return userService.updateUser(id, email, password)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
-        if (userService.deleteUser(id)) {
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.notFound().build();
-    }
-}
+# Verify the image was created
+docker images | grep microservice
 \end{lstlisting}
 
-\section{Step 2: Test Controller with MockMvc}
+\subsection{1.5: Verify Cluster Status}
 
-\begin{lstlisting}[language=java, caption=UserControllerTest.java - Controller Layer Tests]
-package com.cs4297.lab.controller;
+\begin{lstlisting}[caption=Verify cluster status]
+# Check nodes in the cluster
+kubectl get nodes
 
-import com.cs4297.lab.model.User;
-import com.cs4297.lab.service.UserService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
+# Expected output:
+# NAME       STATUS   ROLES           AGE    VERSION
+# minikube   Ready    control-plane   2m     v1.xx.x
 
-import java.util.Arrays;
-import java.util.Optional;
-
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.hamcrest.Matchers.is;
-
-@WebMvcTest(UserController.class)
-class UserControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
-    private UserService userService;
-
-    private User user1;
-    private User user2;
-
-    @BeforeEach
-    void setUp() {
-        user1 = new User();
-        user1.setId(1L);
-        user1.setUsername("alice");
-        user1.setEmail("alice@example.com");
-        user1.setPassword("password123");
-
-        user2 = new User();
-        user2.setId(2L);
-        user2.setUsername("bob");
-        user2.setEmail("bob@example.com");
-        user2.setPassword("password456");
-    }
-
-    @Test
-    void testGetAllUsers_Success() throws Exception {
-        // Arrange
-        when(userService.getAllUsers())
-            .thenReturn(Arrays.asList(user1, user2));
-
-        // Act & Assert
-        mockMvc.perform(get("/api/users")
-                .contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()", is(2)))
-            .andExpect(jsonPath("$[0].username", is("alice")))
-            .andExpect(jsonPath("$[1].username", is("bob")));
-    }
-
-    @Test
-    void testGetUserById_Success() throws Exception {
-        // Arrange
-        when(userService.getUserById(1L))
-            .thenReturn(Optional.of(user1));
-
-        // Act & Assert
-        mockMvc.perform(get("/api/users/1")
-                .contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.username", is("alice")))
-            .andExpect(jsonPath("$.email", is("alice@example.com")));
-    }
-
-    @Test
-    void testGetUserById_NotFound() throws Exception {
-        // Arrange
-        when(userService.getUserById(99L))
-            .thenReturn(Optional.empty());
-
-        // Act & Assert
-        mockMvc.perform(get("/api/users/99")
-                .contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void testCreateUser_Success() throws Exception {
-        // Arrange
-        when(userService.createUser("alice", "alice@example.com",
-            "password123"))
-            .thenReturn(user1);
-
-        // Act & Assert
-        mockMvc.perform(post("/api/users")
-                .param("username", "alice")
-                .param("email", "alice@example.com")
-                .param("password", "password123")
-                .contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.username", is("alice")));
-    }
-
-    @Test
-    void testCreateUser_InvalidEmail() throws Exception {
-        // Arrange
-        when(userService.createUser("alice", "invalid", "password123"))
-            .thenThrow(new IllegalArgumentException("Invalid email"));
-
-        // Act & Assert
-        mockMvc.perform(post("/api/users")
-                .param("username", "alice")
-                .param("email", "invalid")
-                .param("password", "password123")
-                .contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void testDeleteUser_Success() throws Exception {
-        // Arrange
-        when(userService.deleteUser(1L)).thenReturn(true);
-
-        // Act & Assert
-        mockMvc.perform(delete("/api/users/1")
-                .contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isNoContent());
-    }
-
-    @Test
-    void testDeleteUser_NotFound() throws Exception {
-        // Arrange
-        when(userService.deleteUser(99L)).thenReturn(false);
-
-        // Act & Assert
-        mockMvc.perform(delete("/api/users/99")
-                .contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isNotFound());
-    }
-}
+# Get detailed node information
+kubectl describe node minikube
 \end{lstlisting}
 
 \begin{tipbox}
-\texttt{@WebMvcTest} creates a lightweight Spring context with only MVC components, making tests fast and focused. \texttt{MockMvc} simulates HTTP requests without starting a real server.
+If status shows \texttt{NotReady}, wait for the cluster to fully initialize.
 \end{tipbox}
 
 \newpage
 
-\part{Part 5: Integration Testing with Real Database}
+\section{Step 2: Deployment and Service (25 Minutes)}
 
-\section{Step 1: Repository Integration Tests}
+\subsection{2.1: Create Deployment YAML}
 
-\begin{lstlisting}[language=java, caption=UserRepositoryTest.java - Database Integration Tests]
-package com.cs4297.lab.repository;
+A \textbf{Deployment} describes the desired state of your application: container image, number of replicas, port mappings, and resource limits.
 
-import com.cs4297.lab.model.User;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.test.context.TestPropertySource;
+Create \texttt{deployment.yaml}:
 
-import java.util.Optional;
+\begin{lstlisting}[caption=deployment.yaml - Kubernetes Deployment]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: microservice-deployment
+  labels:
+    app: microservice
+spec:
+  # Initial number of replicas
+  replicas: 1
 
-import static org.junit.jupiter.api.Assertions.*;
+  # Selector identifies Pods managed by this Deployment
+  selector:
+    matchLabels:
+      app: microservice
 
-@DataJpaTest
-@TestPropertySource(locations = "classpath:application-test.properties")
-class UserRepositoryTest {
-
-    @Autowired
-    private UserRepository userRepository;
-
-    private User testUser;
-
-    @BeforeEach
-    void setUp() {
-        testUser = new User();
-        testUser.setUsername("testuser");
-        testUser.setEmail("test@example.com");
-        testUser.setPassword("password123");
-    }
-
-    @Test
-    void testSaveUser() {
-        // Act
-        User saved = userRepository.save(testUser);
-
-        // Assert
-        assertNotNull(saved.getId());
-        assertEquals("testuser", saved.getUsername());
-    }
-
-    @Test
-    void testFindByEmail() {
-        // Arrange
-        userRepository.save(testUser);
-
-        // Act
-        Optional<User> found = userRepository.findByEmail("test@example.com");
-
-        // Assert
-        assertTrue(found.isPresent());
-        assertEquals("testuser", found.get().getUsername());
-    }
-
-    @Test
-    void testFindByUsername() {
-        // Arrange
-        userRepository.save(testUser);
-
-        // Act
-        Optional<User> found = userRepository.findByUsername("testuser");
-
-        // Assert
-        assertTrue(found.isPresent());
-        assertEquals("test@example.com", found.get().getEmail());
-    }
-
-    @Test
-    void testExistsByEmail_True() {
-        // Arrange
-        userRepository.save(testUser);
-
-        // Act
-        boolean exists = userRepository.existsByEmail("test@example.com");
-
-        // Assert
-        assertTrue(exists);
-    }
-
-    @Test
-    void testExistsByEmail_False() {
-        // Act
-        boolean exists = userRepository.existsByEmail("nonexistent@example.com");
-
-        // Assert
-        assertFalse(exists);
-    }
-
-    @Test
-    void testUpdateUser() {
-        // Arrange
-        User saved = userRepository.save(testUser);
-        Long userId = saved.getId();
-
-        // Act
-        saved.setEmail("newemail@example.com");
-        userRepository.save(saved);
-        Optional<User> updated = userRepository.findById(userId);
-
-        // Assert
-        assertTrue(updated.isPresent());
-        assertEquals("newemail@example.com", updated.get().getEmail());
-    }
-
-    @Test
-    void testDeleteUser() {
-        // Arrange
-        User saved = userRepository.save(testUser);
-        Long userId = saved.getId();
-
-        // Act
-        userRepository.deleteById(userId);
-        Optional<User> deleted = userRepository.findById(userId);
-
-        // Assert
-        assertFalse(deleted.isPresent());
-    }
-}
+  # Template for creating Pods
+  template:
+    metadata:
+      labels:
+        app: microservice
+    spec:
+      containers:
+      - name: microservice
+        image: microservice:v1
+        imagePullPolicy: Never  # Don't pull from Docker Hub
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
 \end{lstlisting}
 
-\begin{tipbox}
-\texttt{@DataJpaTest} automatically configures a test database and enables transaction management. Each test runs in a transaction that's rolled back afterward, keeping tests isolated.
-\end{tipbox}
-
-\section{Step 2: Full Stack Integration Tests}
-
-\begin{lstlisting}[language=java, caption=UserControllerIntegrationTest.java - Full Stack Tests]
-package com.cs4297.lab;
-
-import com.cs4297.lab.model.User;
-import com.cs4297.lab.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
-
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.hamcrest.Matchers.is;
-
-@SpringBootTest
-@AutoConfigureMockMvc
-@TestPropertySource(locations = "classpath:application-test.properties")
-class UserControllerIntegrationTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @BeforeEach
-    void setUp() {
-        // Clean up database before each test
-        userRepository.deleteAll();
-    }
-
-    @Test
-    void testCreateAndRetrieveUser() throws Exception {
-        // Create user
-        mockMvc.perform(post("/api/users")
-                .param("username", "alice")
-                .param("email", "alice@example.com")
-                .param("password", "password123"))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.username", is("alice")));
-
-        // Retrieve all users
-        mockMvc.perform(get("/api/users"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()", is(1)))
-            .andExpect(jsonPath("$[0].email", is("alice@example.com")));
-    }
-
-    @Test
-    void testUpdateUserThroughAPI() throws Exception {
-        // Create user
-        mockMvc.perform(post("/api/users")
-                .param("username", "alice")
-                .param("email", "alice@example.com")
-                .param("password", "password123"))
-            .andExpect(status().isCreated());
-
-        // Get the user ID from database
-        User user = userRepository.findByUsername("alice").orElse(null);
-        assert user != null;
-
-        // Update user
-        mockMvc.perform(put("/api/users/" + user.getId())
-                .param("email", "newemail@example.com"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.email", is("newemail@example.com")));
-    }
-
-    @Test
-    void testCreateDuplicateUser() throws Exception {
-        // Create first user
-        mockMvc.perform(post("/api/users")
-                .param("username", "alice")
-                .param("email", "alice@example.com")
-                .param("password", "password123"))
-            .andExpect(status().isCreated());
-
-        // Try to create duplicate
-        mockMvc.perform(post("/api/users")
-                .param("username", "alice2")
-                .param("email", "alice@example.com")
-                .param("password", "password123"))
-            .andExpect(status().isBadRequest());
-    }
-}
-\end{lstlisting}
-
-\newpage
-
-\part{Part 6: Automated API Testing with Postman}
-
-\section{Step 1: Start Your Application}
-
-\begin{lstlisting}[language=bash, caption=Start Spring Boot Application]
-# From IntelliJ IDE:
-# 1. Right-click on the main application class
-# 2. Select "Run 'Application'" or press Ctrl+Shift+F10
-
-# Or from command line:
-./mvnw spring-boot:run
-\end{lstlisting}
-
-\section{Step 2: Create Postman Collection}
-
-\begin{enumerate}
-    \item Open Postman
-    \item Click "Create" → "Collection"
-    \item Name it "User API Tests"
-    \item Click "Create"
-\end{enumerate}
-
-\section{Step 3: Add Environment Variable}
-
-\begin{enumerate}
-    \item Click "Environments" in the left sidebar
-    \item Click "Create Environment"
-    \item Name it "Test"
-    \item Add variable:
-    \begin{itemize}
-        \item \textbf{Key:} \texttt{baseUrl}
-        \item \textbf{Value:} \texttt{http://localhost:8080}
-    \end{itemize}
-    \item Click "Save"
-    \item Select "Test" environment in the dropdown
-\end{enumerate}
-
-\section{Step 4: Create Test Requests}
-
-\subsection{GET All Users}
-
-\begin{enumerate}
-    \item Add request to collection: \textbf{GET} \texttt{\{\{baseUrl\}\}/api/users}
-    \item Go to "Tests" tab
-    \item Add test script:
-\end{enumerate}
-
-\begin{lstlisting}[caption=Postman Test - GET All Users]
-pm.test("Status code is 200", function () {
-    pm.response.to.have.status(200);
-});
-
-pm.test("Response is an array", function () {
-    pm.expect(pm.response.json()).to.be.an('array');
-});
-
-pm.test("Response time is less than 1000ms", function () {
-    pm.expect(pm.response.responseTime).to.be.below(1000);
-});
-\end{lstlisting}
-
-\subsection{Create User (POST)}
-
-\begin{enumerate}
-    \item Add request: \textbf{POST} \texttt{\{\{baseUrl\}\}/api/users}
-    \item Body (form-data):
-    \begin{itemize}
-        \item \texttt{username}: \texttt{alice}
-        \item \texttt{email}: \texttt{alice@example.com}
-        \item \texttt{password}: \texttt{password123}
-    \end{itemize}
-    \item Tests tab:
-\end{enumerate}
-
-\begin{lstlisting}[caption=Postman Test - Create User]
-pm.test("Status code is 201", function () {
-    pm.response.to.have.status(201);
-});
-
-pm.test("User ID is returned", function () {
-    var jsonData = pm.response.json();
-    pm.expect(jsonData).to.have.property("id");
-    pm.expect(jsonData.id).to.be.above(0);
-});
-
-pm.test("Email is correct", function () {
-    var jsonData = pm.response.json();
-    pm.expect(jsonData.email).to.equal("alice@example.com");
-});
-
-// Save user ID for next requests
-pm.environment.set("userId", pm.response.json().id);
-\end{lstlisting}
-
-\subsection{Get User by ID}
-
-\begin{enumerate}
-    \item Add request: \textbf{GET} \texttt{\{\{baseUrl\}\}/api/users/\{\{userId\}\}}
-    \item Tests tab:
-\end{enumerate}
-
-\begin{lstlisting}[caption=Postman Test - Get User by ID]
-pm.test("Status code is 200", function () {
-    pm.response.to.have.status(200);
-});
-
-pm.test("Correct user is returned", function () {
-    var jsonData = pm.response.json();
-    pm.expect(jsonData.username).to.equal("alice");
-});
-\end{lstlisting}
-
-\subsection{Update User (PUT)}
-
-\begin{enumerate}
-    \item Add request: \textbf{PUT} \texttt{\{\{baseUrl\}\}/api/users/\{\{userId\}\}}
-    \item Body (form-data):
-    \begin{itemize}
-        \item \texttt{email}: \texttt{newemail@example.com}
-    \end{itemize}
-    \item Tests tab:
-\end{enumerate}
-
-\begin{lstlisting}[caption=Postman Test - Update User]
-pm.test("Status code is 200", function () {
-    pm.response.to.have.status(200);
-});
-
-pm.test("Email was updated", function () {
-    var jsonData = pm.response.json();
-    pm.expect(jsonData.email).to.equal("newemail@example.com");
-});
-\end{lstlisting}
-
-\subsection{Delete User}
-
-\begin{enumerate}
-    \item Add request: \textbf{DELETE} \texttt{\{\{baseUrl\}\}/api/users/\{\{userId\}\}}
-    \item Tests tab:
-\end{enumerate}
-
-\begin{lstlisting}[caption=Postman Test - Delete User]
-pm.test("Status code is 204", function () {
-    pm.response.to.have.status(204);
-});
-
-// Clear the userId variable after successful delete
-pm.environment.unset("userId");
-\end{lstlisting}
-
-\section{Step 5: Run Collection with Runner}
-
-\begin{enumerate}
-    \item Click "Runner" in top menu
-    \item Select your "User API Tests" collection
-    \item Select "Test" environment
-    \item Click "Run User API Tests"
-    \item Observe all tests passing (green checkmarks)
-\end{enumerate}
-
-\begin{tipbox}
-The runner executes all requests in order. Notice how the POST request saves the user ID, and subsequent requests use that ID. This demonstrates data flow between requests.
-\end{tipbox}
-
-\newpage
-
-\part{Part 7: Code Coverage Analysis with JaCoCo}
-
-\section{Step 1: Add JaCoCo Plugin to POM}
-
-Add to \texttt{pom.xml}:
-
-\begin{lstlisting}[language=xml, caption=pom.xml - JaCoCo Configuration]
-<plugin>
-    <groupId>org.jacoco</groupId>
-    <artifactId>jacoco-maven-plugin</artifactId>
-    <version>0.8.8</version>
-    <executions>
-        <execution>
-            <goals>
-                <goal>prepare-agent</goal>
-            </goals>
-        </execution>
-        <execution>
-            <id>report</id>
-            <phase>test</phase>
-            <goals>
-                <goal>report</goal>
-            </goals>
-        </execution>
-    </executions>
-</plugin>
-\end{lstlisting}
-
-\section{Step 2: Run Tests with Coverage}
-
-\begin{lstlisting}[language=bash, caption=Generate Coverage Report]
-# Run Maven tests and generate JaCoCo report
-./mvnw clean test
-
-# Open the HTML report
-# Location: target/site/jacoco/index.html
-open target/site/jacoco/index.html
-\end{lstlisting}
-
-\section{Step 3: Interpret Coverage Report}
-
-The JaCoCo report shows four metrics:
+\textbf{Key Configuration:}
 
 \begin{description}
-    \item[Line Coverage] Percentage of executable code lines executed by tests
-    \item[Branch Coverage] Percentage of code branches (if/else) tested
-    \item[Cyclomatic Complexity] Number of different paths through code
-    \item[Method Coverage] Percentage of methods tested
+    \item[imagePullPolicy: Never] Use only locally-built images. Don't try to pull from Docker Hub.
+    \item[replicas: 1] Start with 1 Pod. We'll scale this later.
+    \item[resources.requests] Minimum CPU/memory the Pod needs.
+    \item[resources.limits] Maximum CPU/memory the Pod can use.
 \end{description}
 
+\subsection{2.2: Create Service YAML}
+
+A \textbf{Service} exposes your Deployment to the network, providing stable IP addresses and load balancing.
+
+Create \texttt{service.yaml}:
+
+\begin{lstlisting}[caption=service.yaml - Kubernetes Service]
+apiVersion: v1
+kind: Service
+metadata:
+  name: microservice-service
+  labels:
+    app: microservice
+spec:
+  type: NodePort
+
+  # Selector matches Pods with this label
+  selector:
+    app: microservice
+
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+    nodePort: 30080
+    name: http
+\end{lstlisting}
+
+\textbf{Service Types:}
+
+\begin{description}
+    \item[ClusterIP] Internal only (default).
+    \item[NodePort] Exposes on each Node's IP address.
+    \item[LoadBalancer] Provisions external load balancer (cloud only).
+\end{description}
+
+For Minikube, we use \texttt{NodePort}.
+
+\subsection{2.3: Apply Configuration}
+
+\begin{lstlisting}[caption=Deploy to cluster]
+# Apply the Deployment
+kubectl apply -f deployment.yaml
+
+# Apply the Service
+kubectl apply -f service.yaml
+
+# Verify Deployment was created
+kubectl get deployments
+
+# Verify Service was created
+kubectl get services
+\end{lstlisting}
+
+\subsection{2.4: Verify Pod Creation}
+
+\begin{lstlisting}[caption=Check Pods]
+# List all Pods
+kubectl get pods
+
+# Get detailed Pod info
+kubectl describe pod <pod-name>
+
+# View Pod logs
+kubectl logs <pod-name>
+\end{lstlisting}
+
+\subsection{2.5: Access the Service}
+
+\begin{lstlisting}[caption=Access the service]
+# Get the external URL
+minikube service microservice-service --url
+
+# Test the endpoint
+curl <returned-url>/
+
+# Or open in browser
+minikube service microservice-service
+\end{lstlisting}
+
+\begin{tipbox}
+If you see ``Connection refused'', wait a few seconds for the Pod to initialize.
+\end{tipbox}
+
+\newpage
+
+\section{Step 3: Declarative Management and Self-Healing (20 Minutes)}
+
+\subsection{3.1: Manual Scaling (Scale Up)}
+
+Instead of manually creating Pods, declare the desired number:
+
+\begin{lstlisting}[caption=Scale to 3 replicas]
+# Scale the Deployment
+kubectl scale deployment microservice-deployment --replicas=3
+
+# Verify 3 Pods are running
+kubectl get pods
+
+# Expected output (after a few seconds):
+# NAME                                    READY   STATUS    AGE
+# microservice-deployment-abc123def456    1/1     Running   3m
+# microservice-deployment-ghi789jkl012    1/1     Running   10s
+# microservice-deployment-mno345pqr678    1/1     Running   10s
+\end{lstlisting}
+
 \begin{importantbox}
-Industry standard target: \textbf{80\% code coverage}. Aim for high coverage on business logic; lower coverage on generated code is acceptable.
+Kubernetes creates new Pods according to the desired state. The Service automatically includes these new Pods in load balancing.
 \end{importantbox}
 
-\newpage
+\subsection{3.2: Demonstrating Self-Healing}
 
-\part{Part 8: Advanced Testing Scenarios}
+Kubernetes' most powerful feature: automatic Pod replacement if one fails.
 
-\section{Mocking External API Calls}
+\begin{lstlisting}[caption=Pod self-healing]
+# Get Pod name
+kubectl get pods
 
-When your service calls an external API, mock it in tests to avoid:
-\begin{itemize}
-    \item Network latency
-    \item External service unavailability
-    \item API rate limits
-    \item Unexpected responses
-\end{itemize}
+# Delete a Pod
+kubectl delete pod <pod-name>
 
-\subsection{Example: Payment API Integration}
+# Check Pods immediately
+kubectl get pods
 
-\begin{lstlisting}[language=java, caption=PaymentService with External API Call]
-package com.cs4297.lab.service;
+# Within seconds:
+# - Deleted Pod disappears
+# - NEW Pod is created with different name
+# - Total count returns to 3
 
-public interface PaymentClient {
-    PaymentResponse processPayment(String userId, double amount);
-}
-
-public class PaymentService {
-    private final PaymentClient paymentClient;
-
-    public PaymentService(PaymentClient paymentClient) {
-        this.paymentClient = paymentClient;
-    }
-
-    public String chargeUser(String userId, double amount) {
-        try {
-            PaymentResponse response = paymentClient.processPayment(
-                userId, amount);
-            if (response.isSuccessful()) {
-                return "Payment of $" + amount + " successful. " +
-                    "Transaction ID: " + response.getTransactionId();
-            }
-        } catch (PaymentException e) {
-            return "Payment failed: " + e.getMessage();
-        }
-        return "Payment failed: unknown error";
-    }
-}
+# This is self-healing!
 \end{lstlisting}
 
-\subsection{Unit Tests with Mocked API}
+\begin{tipbox}
+The Pod name changes (Kubernetes generates random suffixes), but the label (\texttt{app: microservice}) remains the same.
+\end{tipbox}
 
-\begin{lstlisting}[language=java, caption=PaymentServiceTest - Testing with Mock API]
-@ExtendWith(MockitoExtension.class)
-class PaymentServiceTest {
+\subsection{3.3: Scaling Down}
 
-    @Mock
-    private PaymentClient paymentClient;
+\begin{lstlisting}[caption=Scale down]
+# Reduce to 1 replica
+kubectl scale deployment microservice-deployment --replicas=1
 
-    @InjectMocks
-    private PaymentService paymentService;
+# Observe Pods
+kubectl get pods
 
-    @Test
-    void testChargeUser_Success() {
-        // Arrange
-        PaymentResponse mockResponse = new PaymentResponse(true, "TXN123");
-        when(paymentClient.processPayment("user1", 100.0))
-            .thenReturn(mockResponse);
-
-        // Act
-        String result = paymentService.chargeUser("user1", 100.0);
-
-        // Assert
-        assertTrue(result.contains("successful"));
-        assertTrue(result.contains("TXN123"));
-    }
-
-    @Test
-    void testChargeUser_PaymentFailure() {
-        // Arrange
-        PaymentResponse mockResponse = new PaymentResponse(false, null);
-        when(paymentClient.processPayment("user1", 100.0))
-            .thenReturn(mockResponse);
-
-        // Act
-        String result = paymentService.chargeUser("user1", 100.0);
-
-        // Assert
-        assertTrue(result.contains("failed"));
-    }
-
-    @Test
-    void testChargeUser_ExceptionHandling() {
-        // Arrange
-        when(paymentClient.processPayment("user1", 100.0))
-            .thenThrow(new PaymentException("Network timeout"));
-
-        // Act
-        String result = paymentService.chargeUser("user1", 100.0);
-
-        // Assert
-        assertTrue(result.contains("Payment failed"));
-    }
-}
+# 2 Pods are terminated, 1 remains
 \end{lstlisting}
 
 \newpage
 
-\part{Part 9: Lab Demonstration and Evaluation}
+\section{Step 4: Horizontal Pod Autoscaler (HPA) (40 Minutes)}
+
+\subsection{4.1: Enable Metrics Server}
+
+The HPA uses metrics from the Metrics Server:
+
+\begin{lstlisting}[caption=Enable Metrics Server]
+# Enable the addon
+minikube addons enable metrics-server
+
+# Verify it's running
+kubectl get deployment metrics-server -n kube-system
+
+# Wait for it to be ready (30+ seconds)
+kubectl get deployment metrics-server -n kube-system --watch
+# Press Ctrl+C to stop watching
+\end{lstlisting}
+
+\begin{importantbox}
+The Metrics Server collects CPU/memory usage from Pods. Without it, the HPA won't work.
+\end{importantbox}
+
+\subsection{4.2: Create the HPA}
+
+\begin{lstlisting}[caption=Create HPA with kubectl]
+# Create HPA for automatic scaling
+kubectl autoscale deployment microservice-deployment \
+  --cpu-percent=50 \
+  --min=1 \
+  --max=5
+
+# This means:
+# - Scale when CPU > 50% of requested CPU
+# - Minimum 1 Pod
+# - Maximum 5 Pods
+\end{lstlisting}
+
+\subsection{4.3: Monitor HPA Status}
+
+\begin{lstlisting}[caption=Monitor HPA]
+# Check HPA status
+kubectl get hpa
+
+# Expected output (after metrics are available):
+# NAME                          REFERENCE                              TARGETS        MINPODS  MAXPODS  REPLICAS
+# microservice-deployment       Deployment/microservice-deployment     5%/50%         1        5        1
+
+# Watch in real-time
+kubectl get hpa --watch
+# Press Ctrl+C to stop
+\end{lstlisting}
+
+\begin{tipbox}
+Initially you may see \texttt{<unknown>/50\%}. This is normal—the Metrics Server needs time to collect data. Wait 1-2 minutes.
+\end{tipbox}
+
+\subsection{4.4: Generate Load}
+
+Simulate CPU-intensive traffic to trigger scaling:
+
+\begin{lstlisting}[caption=Generate load with curl loop]
+# Terminal 1: Get service URL
+SERVICE_URL=$(minikube service microservice-service --url)
+
+# Terminal 2: Generate load with curl loop
+while true; do
+  curl -s $SERVICE_URL/ > /dev/null
+done
+
+# Terminal 3: Watch HPA scale up
+kubectl get hpa --watch
+
+# You should see:
+# REPLICAS increasing: 1 -> 2 -> 3 -> 4 -> 5
+# TARGETS showing high CPU usage
+\end{lstlisting}
+
+\subsection{4.5: Observe Scaling Down}
+
+\begin{lstlisting}[caption=Stop load and watch scale-down]
+# In Terminal 2, press Ctrl+C to stop load generation
+
+# In Terminal 3, continue watching
+kubectl get hpa --watch
+
+# After 5 minutes (stabilization period):
+# REPLICAS decreases back to 1
+# TARGETS shows low CPU usage
+\end{lstlisting}
+
+\begin{tipbox}
+Kubernetes includes a 5-minute stabilization period to prevent rapid scaling oscillations—this is intentional behavior.
+\end{tipbox}
+
+\section{Step 5: Clean Up}
+
+After the lab, free up resources:
+
+\begin{lstlisting}[caption=Clean up resources]
+# Delete the Service
+kubectl delete service microservice-service
+
+# Delete the Deployment (also deletes Pods)
+kubectl delete deployment microservice-deployment
+
+# Delete the HPA
+kubectl delete hpa microservice-deployment
+
+# Verify everything is deleted
+kubectl get deployments
+kubectl get services
+kubectl get pods
+
+# Stop Minikube (optional)
+minikube stop
+
+# Delete Minikube cluster entirely (optional)
+minikube delete
+\end{lstlisting}
+
+\newpage
+
+\part{Part 3: Lab Demonstration and Evaluation}
 
 \section{What Students Must Demonstrate}
 
@@ -1492,27 +716,23 @@ class PaymentServiceTest {
 \small
 \begin{tabularx}{\textwidth}{|l|X|X|}
 \toprule
-\textbf{Component} & \textbf{Evidence} & \textbf{Evaluation Focus} \\
+\textbf{Component} & \textbf{Evidence Required} & \textbf{Focus Area} \\
 \midrule
-\textbf{Unit Tests} &
-All unit tests pass. Show test output. Explain what each test verifies. &
-Understanding of test isolation and mocking. \\
+\textbf{K8s Core Objects} &
+Show running Pods with \texttt{kubectl get pods}. Access service URL successfully. &
+Deployment and networking configuration. \\
 \midrule
-\textbf{Integration Tests} &
-Integration tests run against real database. Show \texttt{@DataJpaTest} and \texttt{@SpringBootTest} tests passing. &
-Database interaction and transaction handling. \\
+\textbf{Self-Healing} &
+Delete a Pod with \texttt{kubectl delete pod <pod-name>}. Show new Pod automatically created. Replica count unchanged. &
+Declarative state and Deployment Controllers. \\
 \midrule
-\textbf{Controller Tests} &
-MockMvc tests pass. Show JSON response validation. &
-HTTP request/response testing. \\
+\textbf{Horizontal Autoscaling} &
+Show HPA creation. Display \texttt{kubectl get hpa} output. Demonstrate replica count increasing under simulated load. &
+Orchestration power and automated scaling. \\
 \midrule
-\textbf{Postman Collection} &
-Run entire collection in Postman runner. All tests green. Show variable persistence across requests. &
-Automated API testing workflow. \\
-\midrule
-\textbf{Code Coverage} &
-Show JaCoCo report. Explain line/branch coverage. Target 80\%+ on service layer. &
-Understanding testing metrics and coverage goals. \\
+\textbf{Conceptual Understanding} &
+Verbally explain: How HPA differs from AWS EC2 Auto Scaling (Container vs. VM scaling). Why Kubernetes is portable. &
+Real-world context and industry relevance. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -1520,26 +740,47 @@ Understanding testing metrics and coverage goals. \\
 \section{Sample Interview Questions}
 
 \begin{enumerate}
-    \item \textbf{Q: Why should you mock external dependencies in unit tests?}
+    \item \textbf{Q: Explain the Kubernetes desired state model.}
 
-    \textit{A:} Mocks isolate the code being tested, make tests faster, and prevent failures due to external service unavailability. They allow testing edge cases without relying on real services.
+    \textit{A:} You declare what you want (desired state) in YAML files. Kubernetes continuously monitors the actual state and makes changes to match the desired state. If a Pod fails, Kubernetes replaces it automatically.
 
-    \item \textbf{Q: What's the difference between \texttt{@WebMvcTest} and \texttt{@SpringBootTest}?}
+    \item \textbf{Q: What is the difference between the Control Plane and Worker Nodes?}
 
-    \textit{A:} \texttt{@WebMvcTest} creates a lightweight context with only MVC components. \texttt{@SpringBootTest} loads the full application context including database. WebMvcTest is faster; SpringBootTest is more realistic.
+    \textit{A:} The Control Plane manages the cluster (scheduling, desired state, health). Worker Nodes run the Pods. The Control Plane decides where Pods go; Worker Nodes execute those decisions.
 
-    \item \textbf{Q: When should you use integration tests vs. unit tests?}
+    \item \textbf{Q: Why is Kubernetes faster to scale than AWS EC2?}
 
-    \textit{A:} Unit tests verify individual component logic (faster, more isolated). Integration tests verify components work together (slower, more realistic). Use both: mostly unit tests, some integration tests.
+    \textit{A:} Kubernetes scales Pods in seconds (they're lightweight containers already inside VMs). EC2 takes minutes because it must provision entire new virtual machines, including OS boot time.
 
-    \item \textbf{Q: How does Mockito's \texttt{@InjectMocks} work?}
+    \item \textbf{Q: What does ``imagePullPolicy: Never'' do and why did we use it?}
 
-    \textit{A:} It creates an instance of the class under test and injects all \texttt{@Mock} fields into it. This eliminates boilerplate constructor code.
+    \textit{A:} It tells Kubernetes to only use locally-built images, not pull from Docker Hub. We used it because our image doesn't exist in Docker Hub—it's only in Minikube's local Docker daemon.
 
-    \item \textbf{Q: What does 80\% code coverage mean?}
+    \item \textbf{Q: How is Kubernetes more portable than AWS services?}
 
-    \textit{A:} 80\% of the executable code lines are executed by tests. However, coverage doesn't guarantee correctness—tests must verify correct behavior, not just execute code.
+    \textit{A:} Kubernetes is cloud-agnostic. The same YAML files work on AWS (EKS), Azure (AKS), Google Cloud (GKE), and on-premise. AWS services are proprietary and tied to their APIs.
+
+    \item \textbf{Q: What does the HPA do when CPU usage drops below 50\%?}
+
+    \textit{A:} After a 5-minute stabilization period, the HPA scales down by reducing replicas. This prevents thrashing (rapid scale up/down) when load fluctuates.
 \end{enumerate}
+
+\section{Expected Outcomes Checklist}
+
+By the end of this lab, students should be able to:
+
+\begin{itemize}
+    \item[$\square$] Set up and interact with a local Kubernetes cluster using Minikube and kubectl
+    \item[$\square$] Deploy an application using Kubernetes Deployment and expose it using a Service
+    \item[$\square$] Demonstrate the declarative, self-healing, and scaling principles of Kubernetes
+    \item[$\square$] Articulate the high-level K8s architecture (Control Plane vs. Worker Node)
+    \item[$\square$] Compare and contrast Kubernetes with proprietary cloud scaling solutions
+    \item[$\square$] Explain why Kubernetes is portable and avoids vendor lock-in
+    \item[$\square$] Manually scale a Deployment and observe automatic Pod creation
+    \item[$\square$] Demonstrate Kubernetes self-healing by deleting a Pod and observing replacement
+    \item[$\square$] Create and monitor a Horizontal Pod Autoscaler
+    \item[$\square$] Explain the difference between Pod-level scaling and VM-level scaling
+\end{itemize}
 
 \newpage
 
@@ -1547,99 +788,135 @@ Understanding testing metrics and coverage goals. \\
 
 \section{Troubleshooting Guide}
 
+\subsection{Minikube Issues}
+
+\subsubsection{Error: Minikube fails to start}
+
+\begin{warningbox}
+\textbf{Solution:}
+\begin{enumerate}
+    \item Ensure Docker Desktop is running
+    \item Check available disk space: \texttt{df -h}
+    \item Delete old cluster: \texttt{minikube delete}
+    \item Try again: \texttt{minikube start}
+\end{enumerate}
+\end{warningbox}
+
+\subsubsection{Error: kubectl cannot connect}
+
+\begin{warningbox}
+\textbf{Solution:}
+\begin{enumerate}
+    \item Verify Minikube is running: \texttt{minikube status}
+    \item Reset kubectl: \texttt{kubectl config use-context minikube}
+    \item Check kubectl is installed: \texttt{kubectl version --client}
+\end{enumerate}
+\end{warningbox}
+
 \subsection{Docker Issues}
 
-\subsubsection{Error: "Cannot connect to Docker daemon"}
+\subsubsection{Error: Docker image not found when deploying}
 
 \begin{warningbox}
 \textbf{Solution:}
 \begin{enumerate}
-    \item Ensure Docker Desktop is running (check system tray)
-    \item On Mac/Linux: \texttt{docker --version} should work
-    \item Restart Docker Desktop
+    \item Verify you ran: \texttt{eval \$(minikube docker-env)}
+    \item Verify image exists: \texttt{docker images | grep microservice}
+    \item Rebuild image: \texttt{docker build -t microservice:v1 .}
+    \item Delete failed Pod: \texttt{kubectl delete pod <pod-name>}
+    \item Kubernetes creates new Pod with correct image
 \end{enumerate}
 \end{warningbox}
 
-\subsubsection{Error: "Port 3306 already in use"}
+\subsection{Pod Issues}
+
+\subsubsection{Error: Pod is in CrashLoopBackOff}
 
 \begin{warningbox}
 \textbf{Solution:}
 \begin{enumerate}
-    \item Check what's using the port: \texttt{lsof -i :3306}
-    \item Stop the container: \texttt{docker-compose down}
-    \item Or use different port in docker-compose.yml: \texttt{- "3307:3306"}
+    \item Check logs: \texttt{kubectl logs <pod-name>}
+    \item Check resources: \texttt{kubectl describe pod <pod-name>}
+    \item Resource limits may be too low—increase in deployment.yaml
+    \item Redeploy: \texttt{kubectl apply -f deployment.yaml}
 \end{enumerate}
 \end{warningbox}
 
-\subsection{Test Failures}
-
-\subsubsection{Error: "NullPointerException on @Mock field"}
+\subsubsection{Error: Service URL returns connection refused}
 
 \begin{warningbox}
 \textbf{Solution:}
 \begin{enumerate}
-    \item Verify \texttt{@ExtendWith(MockitoExtension.class)} is present on test class
-    \item Ensure \texttt{@InjectMocks} is on the class under test, not \texttt{@Autowired}
+    \item Wait for Pod to initialize (30 seconds)
+    \item Check Pod status: \texttt{kubectl get pods}
+    \item Verify Service points to correct port: \texttt{kubectl get service}
+    \item Check logs: \texttt{kubectl logs <pod-name>}
 \end{enumerate}
 \end{warningbox}
 
-\subsubsection{Error: "Cannot find test database"}
+\subsection{HPA Issues}
+
+\subsubsection{Error: HPA shows \texttt{<unknown>/50\%}}
 
 \begin{warningbox}
 \textbf{Solution:}
 \begin{enumerate}
-    \item Verify \texttt{application-test.properties} exists in \texttt{src/test/resources/}
-    \item Verify docker-compose is running: \texttt{docker ps}
-    \item Check database connection URL matches your setup
+    \item Metrics Server is still collecting data—wait 1-2 minutes
+    \item Verify running: \texttt{kubectl get deployment metrics-server -n kube-system}
+    \item Check metrics: \texttt{kubectl top pods}
+    \item Restart if needed: disable and re-enable addon
 \end{enumerate}
 \end{warningbox}
 
-\subsection{Postman Issues}
-
-\subsubsection{Problem: Environment variable not persisting between requests}
+\subsubsection{Error: Pods not scaling up under load}
 
 \begin{warningbox}
 \textbf{Solution:}
 \begin{enumerate}
-    \item Use \texttt{pm.environment.set("key", value);} in test script
-    \item Verify you've selected the correct environment
-    \item Check the environment dropdown shows your environment name
+    \item Verify HPA exists: \texttt{kubectl get hpa}
+    \item Verify Deployment has resource requests (HPA uses these)
+    \item Check HPA status: \texttt{kubectl describe hpa <hpa-name>}
+    \item Generate more aggressive load
+    \item Check events: \texttt{kubectl describe hpa <hpa-name>}
 \end{enumerate}
 \end{warningbox}
 
-\section{Best Practices Summary}
-
-\begin{itemize}
-    \item \textbf{Test pyramid:} 70\% unit, 20\% integration, 10\% end-to-end
-    \item \textbf{Isolation:} Mock external dependencies in unit tests
-    \item \textbf{Realistic:} Use real databases in integration tests
-    \item \textbf{Coverage:} Target 80\% code coverage on business logic
-    \item \textbf{Naming:} Use clear test names like \texttt{testCreateUser\_Success}
-    \item \textbf{Organization:} Group related tests with \texttt{@Nested} classes
-    \item \textbf{Cleanup:} Always clean up test data in \texttt{@BeforeEach} or \texttt{@AfterEach}
-\end{itemize}
-
-\section{Quick Reference: Testing Annotations}
+\section{Quick Reference: kubectl Commands}
 
 \begin{table}[H]
 \centering
 \small
 \begin{tabularx}{\textwidth}{|l|X|}
 \toprule
-\textbf{Annotation} & \textbf{Purpose} \\
+\textbf{Command} & \textbf{Description} \\
 \midrule
-\texttt{@Test} & Marks method as a test case \\
-\texttt{@BeforeEach} & Runs before each test (setup) \\
-\texttt{@AfterEach} & Runs after each test (cleanup) \\
-\texttt{@Mock} & Creates a mock object \\
-\texttt{@InjectMocks} & Injects mocks into class under test \\
-\texttt{@ExtendWith(MockitoExtension.class)} & Enables Mockito in test class \\
-\texttt{@WebMvcTest} & Tests MVC layer only (lightweight) \\
-\texttt{@SpringBootTest} & Tests entire application (full context) \\
-\texttt{@DataJpaTest} & Tests JPA repositories with database \\
-\texttt{@TestPropertySource} & Provides test-specific properties \\
+\texttt{kubectl get nodes} & List cluster nodes \\
+\texttt{kubectl get pods} & List Pods \\
+\texttt{kubectl get deployments} & List Deployments \\
+\texttt{kubectl get services} & List Services \\
+\texttt{kubectl get hpa} & List Horizontal Pod Autoscalers \\
+\texttt{kubectl describe pod <name>} & Detailed Pod information \\
+\texttt{kubectl logs <pod-name>} & View Pod logs \\
+\texttt{kubectl delete pod <name>} & Delete a Pod \\
+\texttt{kubectl scale deployment <name> --replicas=N} & Scale Deployment \\
+\texttt{kubectl apply -f <file.yaml>} & Apply YAML configuration \\
+\texttt{kubectl edit deployment <name>} & Edit Deployment \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\section{Key Kubernetes Concepts}
+
+\begin{description}
+    \item[Desired State] What you declare in YAML (e.g., 3 replicas running)
+    \item[Actual State] What's currently running in the cluster
+    \item[Reconciliation] Kubernetes continuously adjusting actual state to match desired state
+    \item[Declarative] You say WHAT you want, Kubernetes figures out HOW to achieve it
+    \item[Imperative] You say HOW to do something (traditional scripts)
+    \item[Controller] A Kubernetes component that watches desired state and makes corrections
+    \item[Replica] A copy of your Pod running independently
+    \item[Scale] Increase/decrease number of replicas
+    \item[Self-Healing] Automatic replacement of failed Pods
+\end{description}
 
 \end{document}
